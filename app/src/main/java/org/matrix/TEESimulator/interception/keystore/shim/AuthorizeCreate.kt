@@ -2,6 +2,7 @@ package org.matrix.TEESimulator.interception.keystore.shim
 
 import android.hardware.security.keymint.Algorithm
 import android.hardware.security.keymint.BlockMode
+import android.hardware.security.keymint.Digest
 import android.hardware.security.keymint.KeyParameter
 import android.hardware.security.keymint.KeyPurpose
 import android.hardware.security.keymint.PaddingMode
@@ -57,7 +58,10 @@ object AuthorizeCreate {
         if (opParams.digest.any { it !in keyParams.digest }) {
             return KeystoreErrorCodes.incompatibleDigest
         }
-        if (opParams.rsaOaepMgfDigest.any { it !in keyParams.rsaOaepMgfDigest }) {
+        // A key without RSA_OAEP_MGF_DIGEST tags only authorizes the KeyMint default (SHA1). This
+        // also covers keys restored from persisted metadata that predates MGF digest persistence.
+        val allowedMgfDigests = keyParams.rsaOaepMgfDigest.ifEmpty { listOf(Digest.SHA1) }
+        if (opParams.rsaOaepMgfDigest.any { it !in allowedMgfDigests }) {
             return KeystoreErrorCodes.incompatibleDigest
         }
 

@@ -205,10 +205,12 @@ private class CipherPrimitive(
                 init(opMode, cryptoKey, javax.crypto.spec.IvParameterSpec(nonce))
             } else if (params.padding.firstOrNull() == PaddingMode.RSA_OAEP) {
                 val mainDigest = JcaAlgorithmMapper.mapOaepDigest(params.digest.firstOrNull())
+                // KeyMint defaults the MGF1 digest to SHA1 when RSA_OAEP_MGF_DIGEST is absent;
+                // it does not default to the main OAEP digest.
                 val mgfDigest =
-                    params.rsaOaepMgfDigest.firstOrNull()?.let {
-                        JcaAlgorithmMapper.mapOaepDigest(it)
-                    } ?: mainDigest
+                    JcaAlgorithmMapper.mapOaepDigest(
+                        params.rsaOaepMgfDigest.firstOrNull() ?: Digest.SHA1
+                    )
                 init(
                     opMode,
                     cryptoKey,

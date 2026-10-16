@@ -322,6 +322,9 @@ class KeyMintSecurityLevelInterceptor(
 
     private fun trackAndEnforceOpLimit(callingUid: Int, txId: Long): TransactionResult? {
         if (securityLevel != SecurityLevel.STRONGBOX) return null
+        // Apps that are not in target.txt are not ours to throttle: their operations on real
+        // hardware keys are forwarded untouched, so real keystore2 manages their operation slots.
+        if (ConfigurationManager.shouldSkipUid(callingUid)) return null
         val timestamps = recentOps.computeIfAbsent(callingUid) { ConcurrentLinkedDeque() }
         val cutoff = System.nanoTime() - STRONGBOX_OP_WINDOW_NS
         timestamps.removeIf { it < cutoff }
@@ -1795,6 +1798,13 @@ private fun KeyMintAttestation.toAuthorizations(
     this.digest.forEach { authList.add(createAuth(Tag.DIGEST, KeyParameterValue.digest(it))) }
     this.padding.forEach {
         authList.add(createAuth(Tag.PADDING, KeyParameterValue.paddingMode(it)))
+    }
+    // RSA-OAEP MGF digests must be part of the key's authorizations. loadPersistedKeys() rebuilds
+    // GeneratedKeyInfo.keyParams from these authorizations, so omitting them made a restored key
+    // lose its MGF digests after a reboot: the operation authorization and the OAEP parameters of
+    // the software operation then differed from the same key before the reboot.
+    this.rsaOaepMgfDigest.forEach {
+        authList.add(createAuth(Tag.RSA_OAEP_MGF_DIGEST, KeyParameterValue.digest(it)))
     }
     if (this.rsaPublicExponent != null) {
         authList.add(
